@@ -31,6 +31,8 @@ os10_vlan:
       state: "present"
 
 #########################################}
+{% set port_map = {} %}
+
 {% if os10_vlan is defined and os10_vlan %}
 {% for key,value in os10_vlan.items() %}
   {% if key == "default_vlan_id" %}
@@ -101,29 +103,42 @@ interface {{ ports.port.split() | join() }}
         {% endif %}
       {% endfor %}
     {% endif %}
+{#
 
+To reduce the number of commands that DellOS has to merge, 
+take the YAML and create a reverse mapping of interfaces, and the VLAN
+tags that it is associated with.
+
+Create a dictionary with the following structure:
+
+{"<port_name>": {
+                 "present": [11,12,13],
+                 "absent": [300],
+                }
+}
+
+#}
     {% if vlan_vars.tagged_members is defined %}
       {% for ports in vlan_vars.tagged_members %}
         {% if ports.port is defined and ports.port %}
           {% if 'range' in ports.port %}
-interface {{ ports.port }}
+            {% set port_name = ports.port %}
           {% else %}
-interface {{ ports.port.split() | join() }}
+            {% set port_name = ports.port.split().join() %}
+          {% endif %}
+          {% if ports.port not in port_map %}
+            {# first time we have encountered this port, add it #}
+            {% set port_map[port_name] = {"present": [], "absent": []} %}
           {% endif %}
           {% if ports.state is defined and ports.state == "absent" %}
- no switchport trunk allowed vlan {{ vlan_id[1] }}
+            {% do port_map[port_name]["absent"].append(vlan_id[1]) %}
           {% else %}
- switchport mode trunk
- switchport trunk allowed vlan {{ vlan_id[1] }}
-          {% endif %}
-          {% if ports.access_vlan is defined and ports.access_vlan == "false" %}
- no switchport access vlan
+            {% do port_map[port_name]["present"].append(vlan_id[1]) %}
           {% endif %}
         {% endif %}
      {% endfor %}
-   {% endif %}
+    {% endif %}
 
-  {% endif %}
   {% endif %}
 {% endfor %}
 {% endif %}
